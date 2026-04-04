@@ -35,12 +35,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     })
   }
 
-  // Prevent flash of wrong theme
-  if (!mounted) return null
-
   return (
     <ThemeContext.Provider value={{ theme, toggle }}>
-      {children}
+      {/* Suppress hydration mismatch — theme class applied client-side only */}
+      <div style={{ display: 'contents' }} suppressHydrationWarning>
+        {children}
+      </div>
     </ThemeContext.Provider>
   )
 }
