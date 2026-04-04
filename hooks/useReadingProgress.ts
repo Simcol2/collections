@@ -16,7 +16,10 @@ export function useReadingProgress(memberId: string | null, bookId: string) {
 
   // Load progress from Firebase on mount
   useEffect(() => {
-    if (!memberId) return
+    if (!memberId) {
+      setLoaded(true)
+      return
+    }
     const load = async () => {
       await initBookRecord(memberId, bookId)
       const data = await getReadingProgress(memberId, bookId)

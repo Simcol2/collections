@@ -11,7 +11,7 @@ export const BOOKS: BookMeta[] = [
     accentColor: '#C9A84C',
     planId: 'pln_the-qassandra-collection-g02f0a00',
     priceId: 'prc_one-time-purchase-qassandra-5s400d3p',
-    epubPath: '/epubs/qassandra_collection.epub',
+    epubPath: '/epubs/the-cassandra-collection.epub',
     coverImage: '/covers/qassandra.jpg',
     isAvailable: true,
     description: 'The defining work of The Collections. A curated body of prose that holds its ground.',

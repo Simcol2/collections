@@ -90,8 +90,10 @@ export default function ReaderPage() {
     )
   }
 
+  const isDev = process.env.NODE_ENV === 'development'
+
   // Not logged in or no access
-  if (!member || !hasAnyAccess(planConnections, book)) {
+  if (!isDev && (!member || !hasAnyAccess(planConnections, book))) {
     return (
       <>
         <CollectionsNavbar />
