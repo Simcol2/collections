@@ -1,0 +1,163 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design Tokens ──────────────────────────────────────────────────────────── */
+
+:root {
+  --bg-base:           #F5EFE0;
+  --bg-surface:        #EDE5D0;
+  --bg-elevated:       #E8DFC8;
+  --text-primary:      #2B1A0F;
+  --text-secondary:    #7A5C3E;
+  --text-muted:        #A89070;
+  --accent-gold:       #C9A84C;
+  --accent-gold-light: #E8C97A;
+  --accent-coral:      #D94F3D;
+  --border-color:      #E8C4A0;
+  --shelf-rail:        #C9A84C;
+}
+
+.dark {
+  --bg-base:           #1C1109;
+  --bg-surface:        #2A1A0E;
+  --bg-elevated:       #3A2415;
+  --text-primary:      #F5EFE0;
+  --text-secondary:    #C9A84C;
+  --text-muted:        #8A7055;
+  --accent-gold:       #E8C97A;
+  --accent-gold-light: #F0DFA0;
+  --accent-coral:      #D94F3D;
+  --border-color:      #3A2415;
+  --shelf-rail:        #E8C97A;
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────────── */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+::selection {
+  background: var(--accent-gold);
+  color: #2B1A0F;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-surface); }
+::-webkit-scrollbar-thumb { background: var(--accent-gold); border-radius: 3px; }
+
+/* ─── Gold Gradient Text ─────────────────────────────────────────────────────── */
+
+.text-gold-gradient {
+  background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-light) 50%, var(--accent-gold) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Film Grain ─────────────────────────────────────────────────────────────── */
+
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* ─── Book Spine ─────────────────────────────────────────────────────────────── */
+
+.book-spine {
+  position: relative;
+  cursor: pointer;
+  transform-origin: bottom center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 2px 4px 4px 2px;
+  box-shadow: 4px 0 12px rgba(0,0,0,0.25), -1px 0 0 rgba(255,255,255,0.05);
+}
+
+.book-spine:hover {
+  transform: translateY(-10px);
+  box-shadow: 8px 4px 28px rgba(0,0,0,0.5), -1px 0 0 rgba(255,255,255,0.1);
+}
+
+.book-spine-coming-soon {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.book-spine-coming-soon:hover {
+  transform: translateY(-3px);
+  box-shadow: 4px 2px 14px rgba(0,0,0,0.3);
+}
+
+.book-spine-title {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.12em;
+}
+
+/* ─── Shelf Rail ─────────────────────────────────────────────────────────────── */
+
+.shelf-rail {
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--shelf-rail) 10%,
+    var(--accent-gold-light) 50%,
+    var(--shelf-rail) 90%,
+    transparent 100%
+  );
+  border-radius: 2px;
+  box-shadow: 0 2px 10px rgba(201,168,76,0.4);
+}
+
+.shelf-shadow {
+  height: 18px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.12), transparent);
+}
+
+/* ─── Reader ─────────────────────────────────────────────────────────────────── */
+
+.epub-container {
+  background: var(--bg-base);
+}
+
+/* ─── Utilities ──────────────────────────────────────────────────────────────── */
+
+.transition-theme {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+.drawer-slide { animation: slideInRight 0.35s cubic-bezier(0.16,1,0.3,1); }
+
+@keyframes fadeUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.fade-up { animation: fadeUp 0.4s ease-out; }
