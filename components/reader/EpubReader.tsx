@@ -1,95 +1,60 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Highlighter } from 'lucide-react'
-import { useHighlights, HIGHLIGHT_COLORS } from '@/hooks/useHighlights'
+import { ChevronLeft, ChevronRight, Highlighter, X } from 'lucide-react'
+import { HIGHLIGHT_COLORS } from '@/hooks/useHighlights'
 import type { Highlight } from '@/types'
 
 interface EpubReaderProps {
   epubUrl: string
-  memberId: string
-  bookId: string
   initialCfi: string | null
   onRelocated: (cfi: string, percentage: number) => void
+  highlights: Highlight[]
+  highlightsLoaded: boolean
+  onAddHighlight: (cfiRange: string, text: string, color: Highlight['color'], locationLabel: string) => Promise<Highlight | undefined>
+  onRemoveHighlight: (id: string, cfiRange: string) => void
+  applyToRendition: (rendition: unknown) => void
 }
 
-// Highlight color picker shown on text selection
-interface SelectionMenuProps {
+interface ActiveMenu {
+  type: 'selection' | 'highlight'
   x: number
   y: number
-  onPick: (color: Highlight['color']) => void
-  onDismiss: () => void
-}
-
-function SelectionMenu({ x, y, onPick, onDismiss }: SelectionMenuProps) {
-  return (
-    <div
-      className="fixed z-50 flex items-center gap-2 px-3 py-2 rounded-xl shadow-xl"
-      style={{
-        left: x,
-        top: y - 56,
-        backgroundColor: 'var(--bg-surface)',
-        border: '1px solid var(--border-color)',
-        transform: 'translateX(-50%)',
-      }}
-    >
-      <Highlighter size={13} style={{ color: 'var(--text-muted)' }} />
-      <button
-        onClick={() => onPick('gold')}
-        className="w-5 h-5 rounded-full border-2 border-white/30 hover:scale-110 transition-transform"
-        style={{ backgroundColor: '#C9A84C' }}
-        title="Gold highlight"
-      />
-      <button
-        onClick={() => onPick('coral')}
-        className="w-5 h-5 rounded-full border-2 border-white/30 hover:scale-110 transition-transform"
-        style={{ backgroundColor: '#D94F3D' }}
-        title="Coral highlight"
-      />
-      <button
-        onClick={onDismiss}
-        className="text-xs px-2 py-0.5 rounded"
-        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
-      >
-        Cancel
-      </button>
-    </div>
-  )
+  cfiRange: string
+  text: string
+  highlightId?: string
+  highlightColor?: Highlight['color']
 }
 
 export default function EpubReader({
   epubUrl,
-  memberId,
-  bookId,
   initialCfi,
   onRelocated,
+  highlights,
+  highlightsLoaded,
+  onAddHighlight,
+  onRemoveHighlight,
+  applyToRendition,
 }: EpubReaderProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  // Store rendition and book in refs — never in state (avoid re-render lifecycle issues)
   const renditionRef = useRef<unknown>(null)
   const bookRef = useRef<unknown>(null)
   const initialCfiApplied = useRef(false)
+  const currentPctRef = useRef(0)
+  const currentChapterRef = useRef('')
 
   const [ready, setReady] = useState(false)
-  const [selection, setSelection] = useState<{
-    x: number; y: number; cfiRange: string; text: string
-  } | null>(null)
+  const [chapterTitle, setChapterTitle] = useState('')
+  const [pct, setPct] = useState(0)
+  const [activeMenu, setActiveMenu] = useState<ActiveMenu | null>(null)
 
-  const { highlights, loaded: highlightsLoaded, add, applyToRendition } = useHighlights(
-    memberId,
-    bookId
-  )
-
-  // ── Initialize Epub.js once on mount ───────────────────────────────────────
+  // ── Initialize Epub.js once on mount ─────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current) return
-
     let destroyed = false
 
     const init = async () => {
-      // Dynamic import — Epub.js is browser-only
       const ePub = (await import('epubjs')).default
-
       const book = ePub(epubUrl)
       bookRef.current = book
 
@@ -98,29 +63,71 @@ export default function EpubReader({
         height: '100%',
         allowScriptedContent: true,
         spread: 'none',
+        flow: 'paginated',
+        minSpreadWidth: 9999,
       })
       renditionRef.current = rendition
 
-      // ── Apply highlights after each section renders ─────────────────────
+      // ── White e-reader theme (injected into EPUB iframe) ─────────────────
+      rendition.themes.default({
+        'html, body': {
+          background: '#FFFFFF !important',
+          color: '#1C1109 !important',
+          fontFamily: '"Georgia", "Times New Roman", serif !important',
+          fontSize: 'clamp(15px, 2.5vw, 18px) !important',
+          lineHeight: '1.8 !important',
+          padding: '1rem 1.25rem !important',
+          margin: '0 !important',
+          maxWidth: '100% !important',
+          '-webkit-text-size-adjust': '100%',
+        },
+        'p': { marginBottom: '1em', textAlign: 'justify' },
+        'h1, h2, h3': {
+          fontFamily: '"Playfair Display", Georgia, serif !important',
+          lineHeight: '1.3 !important',
+          marginBottom: '0.75em !important',
+        },
+        'img': { maxWidth: '100% !important', height: 'auto !important' },
+      })
+
+      // ── Apply highlights after each section renders ───────────────────────
       rendition.on('rendered', () => {
         if (highlightsLoaded) applyToRendition(rendition)
       })
 
-      // ── Save progress on page turn ──────────────────────────────────────
-      rendition.on('relocated', (location: {
-        start: { cfi: string; percentage?: number }
-        end: { cfi: string }
+      // ── Track location for chapter title + % ─────────────────────────────
+      rendition.on('relocated', async (location: {
+        start: { cfi: string; percentage?: number; displayed?: { page: number; total: number } }
       }) => {
         const cfi = location.start.cfi
-        const pct = (location.start.percentage ?? 0) * 100
-        onRelocated(cfi, pct)
+        const percentage = (location.start.percentage ?? 0) * 100
+        currentPctRef.current = percentage
+        setPct(Math.round(percentage))
+        onRelocated(cfi, percentage)
+
+        // Get chapter title from TOC
+        try {
+          const b = bookRef.current as {
+            spine: { get: (cfi: string) => { href: string; index: number } | null }
+            navigation: { toc: Array<{ href: string; label: string; subitems?: Array<{ href: string; label: string }> }> }
+          }
+          const spineItem = b.spine.get(cfi)
+          if (spineItem) {
+            const toc = b.navigation?.toc ?? []
+            const allItems = toc.flatMap(t => [t, ...(t.subitems ?? [])])
+            const match = allItems.find(t =>
+              spineItem.href.includes(t.href.split('#')[0]) ||
+              t.href.split('#')[0].includes(spineItem.href)
+            )
+            const label = match?.label?.trim() ?? `Section ${spineItem.index + 1}`
+            currentChapterRef.current = label
+            setChapterTitle(label)
+          }
+        } catch { /* ok */ }
       })
 
-      // ── Text selection → show highlight menu ───────────────────────────
-      rendition.on('selected', (cfiRange: string, contents: {
-        window: Window
-        document: Document
-      }) => {
+      // ── Text selection → show highlight menu ─────────────────────────────
+      rendition.on('selected', (cfiRange: string, contents: { window: Window }) => {
         const sel = contents.window.getSelection()
         if (!sel || sel.isCollapsed) return
         const text = sel.toString().trim()
@@ -131,13 +138,16 @@ export default function EpubReader({
         const iframe = containerRef.current?.querySelector('iframe')
         const iframeRect = iframe?.getBoundingClientRect()
 
-        const x = (iframeRect?.left ?? 0) + rect.left + rect.width / 2
-        const y = (iframeRect?.top ?? 0) + rect.top
-
-        setSelection({ x, y, cfiRange, text })
+        setActiveMenu({
+          type: 'selection',
+          x: (iframeRect?.left ?? 0) + rect.left + rect.width / 2,
+          y: (iframeRect?.top ?? 0) + rect.top,
+          cfiRange,
+          text,
+        })
       })
 
-      // ── Display initial CFI or start of book ───────────────────────────
+      // ── Display initial CFI or start ──────────────────────────────────────
       if (initialCfi && !initialCfiApplied.current) {
         initialCfiApplied.current = true
         await rendition.display(initialCfi)
@@ -152,7 +162,6 @@ export default function EpubReader({
 
     return () => {
       destroyed = true
-      // Clean up Epub.js instances on unmount
       if (renditionRef.current) {
         try { (renditionRef.current as { destroy: () => void }).destroy() } catch { /* ok */ }
       }
@@ -161,63 +170,88 @@ export default function EpubReader({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [epubUrl]) // Only re-init if the book URL changes
+  }, [epubUrl])
 
-  // ── Re-apply highlights when they finish loading from Firebase ─────────────
+  // ── Re-apply highlights + wire click handlers when highlights load ─────────
   useEffect(() => {
-    if (highlightsLoaded && renditionRef.current) {
-      applyToRendition(renditionRef.current)
+    if (!highlightsLoaded || !renditionRef.current) return
+    const r = renditionRef.current as {
+      annotations: {
+        highlight: (
+          cfi: string,
+          data: Record<string, unknown>,
+          cb: (e: MouseEvent) => void,
+          cls: string,
+          styles: Record<string, string>
+        ) => void
+        remove: (cfi: string, type: string) => void
+      }
     }
-  }, [highlightsLoaded, highlights, applyToRendition])
 
-  // ── Navigation ─────────────────────────────────────────────────────────────
+    // Clear and reapply so click handlers include latest onRemoveHighlight
+    highlights.forEach(h => {
+      try { r.annotations.remove(h.cfiRange, 'highlight') } catch { /* ok */ }
+      r.annotations.highlight(
+        h.cfiRange,
+        { id: h.id },
+        (e: MouseEvent) => {
+          e.preventDefault()
+          const iframe = containerRef.current?.querySelector('iframe')
+          const iframeRect = iframe?.getBoundingClientRect()
+          setActiveMenu({
+            type: 'highlight',
+            x: (iframeRect?.left ?? 0) + e.clientX,
+            y: (iframeRect?.top ?? 0) + e.clientY,
+            cfiRange: h.cfiRange,
+            text: h.text,
+            highlightId: h.id,
+            highlightColor: h.color,
+          })
+        },
+        'collections-highlight',
+        { fill: HIGHLIGHT_COLORS[h.color], 'fill-opacity': '1' }
+      )
+    })
+  }, [highlights, highlightsLoaded, onRemoveHighlight])
+
+  // ── Navigation ──────────────────────────────────────────────────────────────
   const prevPage = useCallback(() => {
     (renditionRef.current as { prev: () => void } | null)?.prev()
+    setActiveMenu(null)
   }, [])
 
   const nextPage = useCallback(() => {
     (renditionRef.current as { next: () => void } | null)?.next()
+    setActiveMenu(null)
   }, [])
 
-  // ── Keyboard navigation ────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft')  prevPage()
       if (e.key === 'ArrowRight') nextPage()
+      if (e.key === 'Escape')     setActiveMenu(null)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [prevPage, nextPage])
 
-  // ── Highlight selection handler ────────────────────────────────────────────
+  // ── Highlight handler ────────────────────────────────────────────────────────
   const handleHighlight = async (color: Highlight['color']) => {
-    if (!selection) return
-    const { cfiRange, text } = selection
+    if (!activeMenu || activeMenu.type !== 'selection') return
+    const { cfiRange, text } = activeMenu
+    const locationLabel = `${currentChapterRef.current ? currentChapterRef.current + ' · ' : ''}~${Math.round(currentPctRef.current)}%`
+    await onAddHighlight(cfiRange, text, color, locationLabel)
+    setActiveMenu(null)
+  }
 
-    const newHighlight = await add(cfiRange, text, color)
-    if (newHighlight && renditionRef.current) {
-      try {
-        (renditionRef.current as {
-          annotations: {
-            highlight: (
-              cfi: string,
-              data: Record<string, unknown>,
-              cb: () => void,
-              cls: string,
-              styles: Record<string, string>
-            ) => void
-          }
-        }).annotations.highlight(
-          cfiRange, {}, () => {}, 'collections-highlight',
-          { fill: HIGHLIGHT_COLORS[color], 'fill-opacity': '1' }
-        )
-      } catch { /* ok */ }
-    }
-    setSelection(null)
+  const handleRemove = () => {
+    if (!activeMenu?.highlightId) return
+    onRemoveHighlight(activeMenu.highlightId, activeMenu.cfiRange)
+    setActiveMenu(null)
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col">
+    <div className="relative w-full h-full flex flex-col" onClick={() => setActiveMenu(null)}>
       {/* Loading overlay */}
       {!ready && (
         <div
@@ -226,62 +260,115 @@ export default function EpubReader({
         >
           <div className="flex gap-2">
             {[...Array(3)].map((_, i) => (
-              <div
-                key={i}
-                className="w-2 h-2 rounded-full animate-bounce"
-                style={{
-                  backgroundColor: 'var(--accent-gold)',
-                  animationDelay: `${i * 0.15}s`,
-                }}
-              />
+              <div key={i} className="w-2 h-2 rounded-full animate-bounce"
+                style={{ backgroundColor: 'var(--accent-gold)', animationDelay: `${i * 0.15}s` }} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Epub.js render target */}
-      <div
-        ref={containerRef}
-        className="flex-1 epub-container"
-        style={{ minHeight: 0 }}
-      />
+      {/* Chapter + page info bar */}
+      {ready && chapterTitle && (
+        <div
+          className="flex-shrink-0 flex items-center justify-between px-4 py-1.5 border-b"
+          style={{
+            backgroundColor: 'white',
+            borderColor: '#e5e0d8',
+            fontSize: '11px',
+            fontFamily: 'var(--font-sans)',
+            color: '#8B7355',
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+          }}
+        >
+          <span className="truncate max-w-xs">{chapterTitle}</span>
+          <span>{pct}%</span>
+        </div>
+      )}
 
-      {/* Page navigation — tap zones on mobile, buttons on desktop */}
-      <button
-        onClick={prevPage}
-        className="absolute left-0 top-1/2 -translate-y-1/2 p-3 opacity-0 hover:opacity-100 transition-opacity md:opacity-40 md:hover:opacity-100"
-        aria-label="Previous page"
-        style={{ color: 'var(--accent-gold)' }}
-      >
-        <ChevronLeft size={28} />
-      </button>
-      <button
-        onClick={nextPage}
-        className="absolute right-0 top-1/2 -translate-y-1/2 p-3 opacity-0 hover:opacity-100 transition-opacity md:opacity-40 md:hover:opacity-100"
-        aria-label="Next page"
-        style={{ color: 'var(--accent-gold)' }}
-      >
-        <ChevronRight size={28} />
-      </button>
+      {/* Reader row: arrow | content | arrow */}
+      <div className="flex-1 flex items-stretch min-h-0">
+        {/* Prev arrow */}
+        <button
+          onClick={prevPage}
+          className="flex-shrink-0 w-8 sm:w-12 flex items-center justify-center opacity-30 hover:opacity-80 transition-opacity"
+          aria-label="Previous page"
+          style={{ color: 'var(--accent-gold)', backgroundColor: 'white' }}
+        >
+          <ChevronLeft size={20} />
+        </button>
 
-      {/* Mobile tap zones (left/right 25% of screen) */}
-      <div
-        className="md:hidden absolute left-0 top-0 w-1/4 h-full cursor-pointer"
-        onClick={prevPage}
-      />
-      <div
-        className="md:hidden absolute right-0 top-0 w-1/4 h-full cursor-pointer"
-        onClick={nextPage}
-      />
-
-      {/* Highlight color picker */}
-      {selection && (
-        <SelectionMenu
-          x={selection.x}
-          y={selection.y}
-          onPick={handleHighlight}
-          onDismiss={() => setSelection(null)}
+        {/* Epub.js render target */}
+        <div
+          ref={containerRef}
+          className="flex-1 min-w-0"
+          style={{ backgroundColor: 'white' }}
         />
+
+        {/* Next arrow */}
+        <button
+          onClick={nextPage}
+          className="flex-shrink-0 w-8 sm:w-12 flex items-center justify-center opacity-30 hover:opacity-80 transition-opacity"
+          aria-label="Next page"
+          style={{ color: 'var(--accent-gold)', backgroundColor: 'white' }}
+        >
+          <ChevronRight size={20} />
+        </button>
+      </div>
+
+      {/* Mobile tap zones */}
+      <div className="md:hidden absolute left-0 top-0 w-12 h-full cursor-pointer z-10" onClick={prevPage} />
+      <div className="md:hidden absolute right-0 top-0 w-12 h-full cursor-pointer z-10" onClick={nextPage} />
+
+      {/* Selection / highlight action menu */}
+      {activeMenu && (
+        <div
+          className="fixed z-50 flex items-center gap-2 px-3 py-2 rounded-xl shadow-xl"
+          style={{
+            left: activeMenu.x,
+            top: activeMenu.y - 56,
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--border-color)',
+            transform: 'translateX(-50%)',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          {activeMenu.type === 'selection' ? (
+            <>
+              <Highlighter size={13} style={{ color: 'var(--text-muted)' }} />
+              <button onClick={() => handleHighlight('gold')}
+                className="w-5 h-5 rounded-full border-2 border-white/30 hover:scale-110 transition-transform"
+                style={{ backgroundColor: '#C9A84C' }} title="Gold highlight" />
+              <button onClick={() => handleHighlight('coral')}
+                className="w-5 h-5 rounded-full border-2 border-white/30 hover:scale-110 transition-transform"
+                style={{ backgroundColor: '#D94F3D' }} title="Coral highlight" />
+              <button onClick={() => setActiveMenu(null)}
+                className="p-0.5 rounded transition-colors"
+                style={{ color: 'var(--text-muted)' }}>
+                <X size={13} />
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="text-xs truncate max-w-32"
+                style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', fontSize: '11px' }}>
+                {activeMenu.highlightColor === 'gold' ? '● Gold' : '● Coral'}
+              </span>
+              <button
+                onClick={handleRemove}
+                className="text-xs px-2 py-1 rounded-lg transition-colors"
+                style={{ backgroundColor: '#D94F3D22', color: '#D94F3D', fontFamily: 'var(--font-sans)', fontSize: '11px' }}
+              >
+                Remove
+              </button>
+              <button onClick={() => setActiveMenu(null)}
+                className="p-0.5 rounded transition-colors"
+                style={{ color: 'var(--text-muted)' }}>
+                <X size={13} />
+              </button>
+            </>
+          )}
+        </div>
       )}
     </div>
   )

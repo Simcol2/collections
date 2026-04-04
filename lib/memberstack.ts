@@ -1,7 +1,7 @@
 // Memberstack config and helper constants
 // The SDK is initialized via <MemberstackProvider> in layout.tsx
 
-export const MEMBERSTACK_APP_ID = process.env.NEXT_PUBLIC_MEMBERSTACK_APP_ID ?? 'app_cmkm3ffnl032f0sqnhu4qhsdd'
+export const MEMBERSTACK_APP_ID = process.env.NEXT_PUBLIC_MEMBERSTACK_PUBLIC_KEY ?? 'pk_03d608e60a365322507a'
 
 export const PLANS = {
   QASSANDRA: 'pln_the-qassandra-collection-g02f0a00',

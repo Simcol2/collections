@@ -48,7 +48,7 @@ export default function ReaderPage() {
   const planConnections = member?.planConnections ?? []
 
   const { progress, loaded: progressLoaded, onRelocated } = useReadingProgress(memberId, bookId)
-  const { highlights, remove } = useHighlights(memberId, bookId)
+  const { highlights, loaded: highlightsLoaded, add, remove, applyToRendition } = useHighlights(memberId, bookId)
 
   // Jump reader to a CFI location (used from FavoriteQuotes)
   const [jumpCfi, setJumpCfi] = useState<string | null>(null)
@@ -196,15 +196,18 @@ export default function ReaderPage() {
         <ProgressBar percentage={progress.percentageCompleted} />
       </div>
 
-      {/* Reader — fills remaining height */}
-      <div className="flex-1 min-h-0 max-w-3xl w-full mx-auto px-2 sm:px-8 py-4">
+      {/* Reader — fills remaining height, no extra padding (EpubReader owns its layout) */}
+      <div className="flex-1 min-h-0 w-full">
         {progressLoaded && (
           <EpubReader
-            epubUrl={book.epubPath}
-            memberId={memberId!}
-            bookId={bookId}
+            epubUrl={book.epubPath!}
             initialCfi={jumpCfi ?? progress.currentCfi}
             onRelocated={onRelocated}
+            highlights={highlights}
+            highlightsLoaded={highlightsLoaded}
+            onAddHighlight={add}
+            onRemoveHighlight={remove}
+            applyToRendition={applyToRendition}
           />
         )}
       </div>

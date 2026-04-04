@@ -29,3 +29,5 @@ Thumbs.db
 
 # EPUB files (large binaries — store in Firebase Storage instead)
 public/epubs/*.epub
+
+.vercel

@@ -66,6 +66,7 @@ export interface Highlight {
   cfiRange: string
   text: string
   color: 'gold' | 'coral'
+  locationLabel?: string
   note?: string
   createdAt?: unknown
 }

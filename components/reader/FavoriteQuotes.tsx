@@ -124,16 +124,26 @@ export default function FavoriteQuotes({
 
                 {/* Actions */}
                 <div className="flex items-center justify-between">
-                  <span
-                    className="text-xs px-2 py-0.5 rounded-full"
-                    style={{
-                      backgroundColor: colorLabel(h.color) + '22',
-                      color: colorLabel(h.color),
-                      fontFamily: 'var(--font-sans)',
-                    }}
-                  >
-                    {h.color}
-                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    <span
+                      className="text-xs px-2 py-0.5 rounded-full self-start"
+                      style={{
+                        backgroundColor: colorLabel(h.color) + '22',
+                        color: colorLabel(h.color),
+                        fontFamily: 'var(--font-sans)',
+                      }}
+                    >
+                      {h.color}
+                    </span>
+                    {h.locationLabel && (
+                      <span
+                        className="text-xs px-2"
+                        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
+                      >
+                        {h.locationLabel}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="flex items-center gap-1">
                     {/* Jump to location */}

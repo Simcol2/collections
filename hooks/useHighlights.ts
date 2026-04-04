@@ -38,12 +38,24 @@ export function useHighlights(memberId: string | null, bookId: string) {
 
   // Add a highlight — writes to Firebase, updates local state immediately
   const add = useCallback(
-    async (cfiRange: string, text: string, color: Highlight['color'] = 'gold') => {
-      if (!memberId) return
-      const id = await addHighlight(memberId, bookId, { cfiRange, text, color })
-      const newHighlight: Highlight = { id, cfiRange, text, color }
-      setHighlights(prev => [...prev, newHighlight])
-      return newHighlight
+    async (cfiRange: string, text: string, color: Highlight['color'] = 'gold', locationLabel?: string) => {
+      const newHighlight: Highlight = {
+        id: memberId ? undefined : `local-${Date.now()}`,
+        cfiRange, text, color, locationLabel,
+      }
+      if (!memberId) {
+        newHighlight.id = `local-${Date.now()}`
+        setHighlights(prev => [...prev, newHighlight as Highlight & { id: string }])
+        return newHighlight as Highlight & { id: string }
+      }
+      try {
+        const id = await addHighlight(memberId, bookId, { cfiRange, text, color, locationLabel })
+        const saved: Highlight = { id, cfiRange, text, color, locationLabel }
+        setHighlights(prev => [...prev, saved])
+        return saved
+      } catch {
+        return undefined
+      }
     },
     [memberId, bookId]
   )
