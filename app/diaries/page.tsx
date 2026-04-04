@@ -52,35 +52,16 @@ export default function DiariesPage() {
               <iframe src="https://yourname.substack.com/embed" ...></iframe>
               or their custom <script> embed snippet.
           ─────────────────────────────────────────────────────────────── */}
-          <div
-            className="rounded-2xl p-8 text-center"
-            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
-          >
-            {/* REPLACE THIS PLACEHOLDER WITH YOUR SUBSTACK EMBED CODE */}
-            <p
-              className="text-sm uppercase tracking-widest mb-2"
-              style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
-            >
-              Newsletter Embed
-            </p>
-            <p
-              className="text-base italic mb-6"
-              style={{ fontFamily: 'var(--font-serif)', color: 'var(--text-secondary)' }}
-            >
-              Paste your Substack embed code here when ready.
-            </p>
-            <div
-              className="inline-block px-1 py-1 rounded-lg text-xs"
-              style={{
-                backgroundColor: 'var(--bg-elevated)',
-                color: 'var(--text-muted)',
-                fontFamily: 'monospace',
-              }}
-            >
-              {'// app/diaries/page.tsx → replace placeholder below'}
-            </div>
+          <div className="flex justify-center">
+            <iframe
+              src="https://longtalediaries.substack.com/embed"
+              width="480"
+              height="320"
+              style={{ border: '1px solid #EEE', background: 'white' }}
+              frameBorder={0}
+              scrolling="no"
+            />
           </div>
-          {/* ── End Substack embed ─────────────────────────────────────── */}
 
           {/* Back link */}
           <div className="mt-12 text-center">
