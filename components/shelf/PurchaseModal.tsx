@@ -28,9 +28,9 @@ export default function PurchaseModal({ book, onClose }: PurchaseModalProps) {
 
   const handlePurchase = async () => {
     if (!member) {
-      // Open signup modal — user will sign up then come back to purchase
-      openModal({ type: 'SIGNUP' })
       onClose()
+      await openModal({ type: 'SIGNUP' })
+      window.location.reload()
       return
     }
     if (!book.priceId) return
@@ -131,6 +131,18 @@ export default function PurchaseModal({ book, onClose }: PurchaseModalProps) {
         >
           {member ? 'Purchase Access' : 'Sign Up & Purchase'}
         </button>
+
+        {!member && (
+          <p className="mt-3 text-center text-xs" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
+            Already have an account?{' '}
+            <button
+              onClick={async () => { onClose(); await openModal({ type: 'LOGIN' }); window.location.reload() }}
+              style={{ color: 'var(--accent-gold)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 'inherit' }}
+            >
+              Sign in
+            </button>
+          </p>
+        )}
 
         {member && (
           <p

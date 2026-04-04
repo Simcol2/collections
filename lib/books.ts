@@ -23,7 +23,8 @@ export const BOOKS: BookMeta[] = [
     titleColor: '#F5EFE0',       // canvas cream
     accentColor: '#E8C4A0',
     planId: null,
-    isAvailable: false,
+    isAvailable: true,
+    epubPath: '/epubs/s-the-collection.epub',
     tagline: 'Coming soon.',
   },
   {

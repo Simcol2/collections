@@ -21,15 +21,20 @@ export function useReadingProgress(memberId: string | null, bookId: string) {
       return
     }
     const load = async () => {
-      await initBookRecord(memberId, bookId)
-      const data = await getReadingProgress(memberId, bookId)
-      if (data) {
-        setProgress({
-          currentCfi: data.currentCfi ?? null,
-          percentageCompleted: data.percentageCompleted ?? 0,
-        })
+      try {
+        await initBookRecord(memberId, bookId)
+        const data = await getReadingProgress(memberId, bookId)
+        if (data) {
+          setProgress({
+            currentCfi: data.currentCfi ?? null,
+            percentageCompleted: data.percentageCompleted ?? 0,
+          })
+        }
+      } catch {
+        // Firebase unavailable or rules not set — reader works without sync
+      } finally {
+        setLoaded(true)
       }
-      setLoaded(true)
     }
     load()
   }, [memberId, bookId])

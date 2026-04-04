@@ -24,9 +24,14 @@ export function useHighlights(memberId: string | null, bookId: string) {
   useEffect(() => {
     if (!memberId) return
     const load = async () => {
-      const data = await getHighlights(memberId, bookId)
-      setHighlights(data)
-      setLoaded(true)
+      try {
+        const data = await getHighlights(memberId, bookId)
+        setHighlights(data)
+      } catch {
+        // Firebase unavailable — highlights work without sync
+      } finally {
+        setLoaded(true)
+      }
     }
     load()
   }, [memberId, bookId])

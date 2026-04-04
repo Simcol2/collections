@@ -21,13 +21,15 @@ export default function CollectionsNavbar() {
   const { signOut } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const handleAuthAction = () => {
-    if (member) {
-      signOut()
-    } else {
-      openModal({ type: 'LOGIN' })
-    }
+  const handleAuthAction = async () => {
     setMobileOpen(false)
+    if (member) {
+      await signOut()
+      window.location.reload()
+    } else {
+      await openModal({ type: 'LOGIN' })
+      window.location.reload()
+    }
   }
 
   return (

@@ -96,7 +96,7 @@ export default function EpubReader({
       const rendition = book.renderTo(containerRef.current!, {
         width: '100%',
         height: '100%',
-        allowScriptedContent: false,
+        allowScriptedContent: true,
         spread: 'none',
       })
       renditionRef.current = rendition
