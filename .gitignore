@@ -31,3 +31,8 @@ Thumbs.db
 public/epubs/*.epub
 
 .vercel
+
+# Python agents / service keys
+my_agent/
+manuscript_scout/
+service-key.json
