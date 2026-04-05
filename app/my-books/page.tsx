@@ -27,7 +27,7 @@ export default function MyBooksPage() {
 
   const handleInstall = async () => {
     if (!installPrompt) return
-    const prompt = installPrompt as { prompt: () => void; userChoice: Promise<{ outcome: string }> }
+    const prompt = installPrompt as unknown as { prompt: () => void; userChoice: Promise<{ outcome: string }> }
     prompt.prompt()
     const { outcome } = await prompt.userChoice
     if (outcome === 'accepted') { setIsInstalled(true); setInstallPrompt(null) }
