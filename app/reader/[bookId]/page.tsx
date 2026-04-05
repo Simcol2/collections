@@ -12,6 +12,7 @@ import ProgressBar from '@/components/reader/ProgressBar'
 import FavoriteQuotes from '@/components/reader/FavoriteQuotes'
 import { useReadingProgress } from '@/hooks/useReadingProgress'
 import { useHighlights } from '@/hooks/useHighlights'
+import { useBookmarks } from '@/hooks/useBookmarks'
 import { getBook, hasAnyAccess } from '@/lib/books'
 
 // Epub.js is browser-only — must be dynamically imported with ssr: false
@@ -49,6 +50,7 @@ export default function ReaderPage() {
 
   const { progress, loaded: progressLoaded, onRelocated } = useReadingProgress(memberId, bookId)
   const { highlights, loaded: highlightsLoaded, add, remove, applyToRendition } = useHighlights(memberId, bookId)
+  const { bookmarks, add: addBookmark, remove: removeBookmark } = useBookmarks(memberId, bookId)
 
   // Jump reader to a CFI location (used from FavoriteQuotes)
   const [jumpCfi, setJumpCfi] = useState<string | null>(null)
@@ -208,6 +210,9 @@ export default function ReaderPage() {
             onAddHighlight={add}
             onRemoveHighlight={remove}
             applyToRendition={applyToRendition}
+            bookmarks={bookmarks}
+            onAddBookmark={addBookmark}
+            onRemoveBookmark={removeBookmark}
           />
         )}
       </div>

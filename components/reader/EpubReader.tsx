@@ -1,9 +1,15 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Highlighter, X, Maximize, Minimize } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Highlighter, X, Maximize, Minimize, List, Bookmark, BookmarkCheck } from 'lucide-react'
 import { HIGHLIGHT_COLORS } from '@/hooks/useHighlights'
-import type { Highlight } from '@/types'
+import type { Highlight, BookmarkItem } from '@/types'
+
+interface TocItem {
+  label: string
+  href: string
+  subitems?: TocItem[]
+}
 
 interface EpubReaderProps {
   epubUrl: string
@@ -14,6 +20,9 @@ interface EpubReaderProps {
   onAddHighlight: (cfiRange: string, text: string, color: Highlight['color'], locationLabel: string) => Promise<Highlight | undefined>
   onRemoveHighlight: (id: string, cfiRange: string) => void
   applyToRendition: (rendition: unknown) => void
+  bookmarks: BookmarkItem[]
+  onAddBookmark: (cfi: string, label: string) => void
+  onRemoveBookmark: (id: string) => void
 }
 
 interface ActiveMenu {
@@ -35,6 +44,9 @@ export default function EpubReader({
   onAddHighlight,
   onRemoveHighlight,
   applyToRendition,
+  bookmarks,
+  onAddBookmark,
+  onRemoveBookmark,
 }: EpubReaderProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -42,19 +54,23 @@ export default function EpubReader({
   const bookRef = useRef<unknown>(null)
   const initialCfiApplied = useRef(false)
   const currentPctRef = useRef(0)
+  const currentCfiRef = useRef('')
   const currentChapterRef = useRef('')
 
   const [ready, setReady] = useState(false)
   const [chapterTitle, setChapterTitle] = useState('Loading…')
   const [pct, setPct] = useState(0)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
   const [activeMenu, setActiveMenu] = useState<ActiveMenu | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [tocItems, setTocItems] = useState<TocItem[]>([])
+  const [tocOpen, setTocOpen] = useState(false)
 
   // ── Fullscreen toggle ─────────────────────────────────────────────────────────
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       wrapperRef.current?.requestFullscreen().catch(() => {
-        // If native fullscreen fails, toggle immersive state instead
         setIsFullscreen(f => !f)
       })
     } else {
@@ -92,7 +108,6 @@ export default function EpubReader({
       rendition.themes.default({
         'html': {
           background: '#FFFFFF !important',
-          overflow: 'hidden !important',
         },
         'body': {
           background: '#FFFFFF !important',
@@ -100,7 +115,6 @@ export default function EpubReader({
           fontFamily: '"Georgia", "Times New Roman", serif !important',
           fontSize: '20px !important',
           lineHeight: '1.8 !important',
-          // Use % padding to stay proportional on any screen width
           padding: '1.25rem 5% !important',
           margin: '0 !important',
           maxWidth: '100% !important',
@@ -122,21 +136,32 @@ export default function EpubReader({
         if (highlightsLoaded) applyToRendition(rendition)
       })
 
-      // ── Track location for chapter title + % ─────────────────────────────
+      // ── Track location for chapter title + % + page ──────────────────────
       rendition.on('relocated', async (location: {
         start: { cfi: string; percentage?: number }
       }) => {
         const cfi = location.start.cfi
         const percentage = (location.start.percentage ?? 0) * 100
         currentPctRef.current = percentage
+        currentCfiRef.current = cfi
         setPct(Math.round(percentage))
         onRelocated(cfi, percentage)
+
+        // Update page number from locations if generated
+        try {
+          const b = bookRef.current as {
+            locations: { locationFromCfi: (cfi: string) => number; total: number }
+          }
+          if (b.locations?.total > 0) {
+            setCurrentPage(b.locations.locationFromCfi(cfi) + 1)
+          }
+        } catch { /* ok */ }
 
         // Resolve chapter title from TOC
         try {
           const b = bookRef.current as {
             spine: { get: (cfi: string) => { href: string; index: number } | null }
-            navigation: { toc: Array<{ href: string; label: string; subitems?: Array<{ href: string; label: string }> }> }
+            navigation: { toc: TocItem[] }
           }
           const spineItem = b.spine.get(cfi)
           if (spineItem) {
@@ -193,11 +218,28 @@ export default function EpubReader({
       }, 100)
 
       if (!destroyed) setReady(true)
+
+      // ── Load TOC ─────────────────────────────────────────────────────────
+      try {
+        await book.ready
+        const nav = (book as unknown as { navigation: { toc: TocItem[] } }).navigation
+        if (nav?.toc) setTocItems(nav.toc)
+      } catch { /* ok */ }
+
+      // ── Generate locations for page numbers (async, non-blocking) ────────
+      try {
+        await book.ready
+        const b = book as unknown as {
+          locations: { generate: (chars: number) => Promise<string[]>; total: number }
+        }
+        await b.locations.generate(1650)
+        if (!destroyed) setTotalPages(b.locations.total)
+      } catch { /* ok */ }
     }
 
     init()
 
-    // Resize rendition when container size changes (orientation flip, fullscreen)
+    // Resize rendition when container size changes
     const observer = new ResizeObserver(() => {
       if (renditionRef.current) {
         try {
@@ -270,7 +312,7 @@ export default function EpubReader({
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft')  prevPage()
       if (e.key === 'ArrowRight') nextPage()
-      if (e.key === 'Escape')     setActiveMenu(null)
+      if (e.key === 'Escape')     { setActiveMenu(null); setTocOpen(false) }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -284,18 +326,39 @@ export default function EpubReader({
     setActiveMenu(null)
   }
 
-  const handleRemove = () => {
+  const handleRemoveHighlight = () => {
     if (!activeMenu?.highlightId) return
     onRemoveHighlight(activeMenu.highlightId, activeMenu.cfiRange)
     setActiveMenu(null)
   }
+
+  // ── Bookmark helpers ─────────────────────────────────────────────────────────
+  const currentBookmark = bookmarks.find(b => b.cfi === currentCfiRef.current)
+  const isBookmarked = !!currentBookmark
+
+  const handleBookmark = useCallback(() => {
+    if (isBookmarked && currentBookmark) {
+      onRemoveBookmark(currentBookmark.id)
+    } else {
+      const label = `${currentChapterRef.current ? currentChapterRef.current + ' · ' : ''}${Math.round(currentPctRef.current)}%`
+      onAddBookmark(currentCfiRef.current, label)
+    }
+  }, [isBookmarked, currentBookmark, onAddBookmark, onRemoveBookmark])
+
+  // ── TOC navigation ───────────────────────────────────────────────────────────
+  const handleTocJump = useCallback((href: string) => {
+    try {
+      (renditionRef.current as { display: (target: string) => void } | null)?.display(href)
+    } catch { /* ok */ }
+    setTocOpen(false)
+  }, [])
 
   return (
     <div
       ref={wrapperRef}
       className="relative w-full h-full flex flex-col"
       style={{ backgroundColor: 'white' }}
-      onClick={() => setActiveMenu(null)}
+      onClick={() => { setActiveMenu(null); setTocOpen(false) }}
     >
       {/* Loading overlay */}
       {!ready && (
@@ -309,7 +372,7 @@ export default function EpubReader({
         </div>
       )}
 
-      {/* Chapter + % info bar — always visible once ready */}
+      {/* Chapter + % info bar */}
       <div
         className="flex-shrink-0 flex items-center justify-between border-b"
         style={{
@@ -321,19 +384,40 @@ export default function EpubReader({
           transition: 'opacity 0.3s',
         }}
       >
+        {/* TOC button */}
+        <button
+          onClick={e => { e.stopPropagation(); setTocOpen(o => !o) }}
+          style={{ color: '#9B8B72', marginRight: '8px', flexShrink: 0 }}
+          aria-label="Table of contents"
+          title="Table of contents"
+        >
+          <List size={14} />
+        </button>
+
         <span
-          className="truncate"
-          style={{ fontSize: '11px', fontFamily: 'var(--font-sans)', color: '#9B8B72', letterSpacing: '0.06em', textTransform: 'uppercase', maxWidth: '75%' }}
+          className="truncate flex-1"
+          style={{ fontSize: '11px', fontFamily: 'var(--font-sans)', color: '#9B8B72', letterSpacing: '0.06em', textTransform: 'uppercase' }}
         >
           {chapterTitle}
         </span>
-        <span style={{ fontSize: '11px', fontFamily: 'var(--font-sans)', color: '#9B8B72', letterSpacing: '0.06em', flexShrink: 0 }}>
+
+        {/* Bookmark button */}
+        <button
+          onClick={e => { e.stopPropagation(); handleBookmark() }}
+          style={{ color: isBookmarked ? '#C9A84C' : '#9B8B72', marginLeft: '8px', flexShrink: 0 }}
+          aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark this page'}
+          title={isBookmarked ? 'Remove bookmark' : 'Bookmark this page'}
+        >
+          {isBookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+        </button>
+
+        <span style={{ fontSize: '11px', fontFamily: 'var(--font-sans)', color: '#9B8B72', letterSpacing: '0.06em', flexShrink: 0, marginLeft: '8px' }}>
           {pct}%
         </span>
       </div>
 
       {/* Reader row: arrow | content | arrow */}
-      <div className="flex-1 flex items-stretch min-h-0">
+      <div className="flex-1 flex items-stretch min-h-0 relative">
 
         {/* Prev arrow */}
         <button
@@ -385,9 +469,72 @@ export default function EpubReader({
         </div>
       </div>
 
-      {/* Mobile tap zones (middle 60% to avoid arrow columns) */}
+      {/* Page number bar at bottom */}
+      {ready && totalPages > 0 && (
+        <div
+          className="flex-shrink-0 flex items-center justify-center border-t"
+          style={{
+            backgroundColor: 'white',
+            borderColor: '#e8e0d4',
+            padding: '4px 16px',
+            minHeight: '24px',
+          }}
+        >
+          <span style={{ fontSize: '10px', fontFamily: 'var(--font-sans)', color: '#C4B49A', letterSpacing: '0.08em' }}>
+            {currentPage > 0 ? `${currentPage} / ${totalPages}` : `— / ${totalPages}`}
+          </span>
+        </div>
+      )}
+
+      {/* Mobile tap zones */}
       <div className="md:hidden absolute left-14 top-8 w-1/3 h-full cursor-pointer z-5" onClick={prevPage} />
       <div className="md:hidden absolute right-14 top-8 w-1/3 h-full cursor-pointer z-5" onClick={nextPage} />
+
+      {/* TOC panel */}
+      {tocOpen && (
+        <div
+          className="absolute top-8 left-14 z-40 rounded-xl shadow-2xl overflow-y-auto"
+          style={{
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--border-color)',
+            maxHeight: '70%',
+            width: '260px',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-color)' }}>
+            <span style={{ fontSize: '11px', fontFamily: 'var(--font-sans)', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              Contents
+            </span>
+            <button onClick={() => setTocOpen(false)} style={{ color: 'var(--text-muted)' }}>
+              <X size={13} />
+            </button>
+          </div>
+          <div className="py-2">
+            {tocItems.map((item, i) => (
+              <div key={i}>
+                <button
+                  onClick={() => handleTocJump(item.href)}
+                  className="w-full text-left px-4 py-2 hover:opacity-70 transition-opacity"
+                  style={{ fontFamily: 'var(--font-display)', fontSize: '13px', color: 'var(--text-primary)' }}
+                >
+                  {item.label}
+                </button>
+                {item.subitems?.map((sub, j) => (
+                  <button
+                    key={j}
+                    onClick={() => handleTocJump(sub.href)}
+                    className="w-full text-left px-8 py-1.5 hover:opacity-70 transition-opacity"
+                    style={{ fontFamily: 'var(--font-sans)', fontSize: '11px', color: 'var(--text-muted)' }}
+                  >
+                    {sub.label}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Selection / highlight action menu */}
       {activeMenu && (
@@ -420,7 +567,7 @@ export default function EpubReader({
                 {activeMenu.highlightColor === 'gold' ? '● Gold' : '● Coral'}
               </span>
               <button
-                onClick={handleRemove}
+                onClick={handleRemoveHighlight}
                 className="text-xs px-2 py-1 rounded-lg"
                 style={{ backgroundColor: '#D94F3D22', color: '#D94F3D', fontFamily: 'var(--font-sans)', fontSize: '11px' }}
               >

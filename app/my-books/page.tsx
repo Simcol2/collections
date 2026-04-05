@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMember, useAuth } from '@memberstack/react'
-import { BookOpen, Lock } from 'lucide-react'
+import { BookOpen, Lock, Download } from 'lucide-react'
 import CollectionsNavbar from '@/components/layout/CollectionsNavbar'
 import { BOOKS, hasAnyAccess } from '@/lib/books'
 import { getReadingProgress } from '@/lib/firebase'
@@ -15,6 +15,23 @@ export default function MyBooksPage() {
   const { member } = useMember()
   const { status } = useAuth()
   const [progressMap, setProgressMap] = useState<Record<string, ReadingProgress>>({})
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null)
+  const [isInstalled, setIsInstalled] = useState(false)
+
+  useEffect(() => {
+    const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e) }
+    window.addEventListener('beforeinstallprompt', handler)
+    if (window.matchMedia('(display-mode: standalone)').matches) setIsInstalled(true)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  const handleInstall = async () => {
+    if (!installPrompt) return
+    const prompt = installPrompt as { prompt: () => void; userChoice: Promise<{ outcome: string }> }
+    prompt.prompt()
+    const { outcome } = await prompt.userChoice
+    if (outcome === 'accepted') { setIsInstalled(true); setInstallPrompt(null) }
+  }
 
   const isLoading = status === 'LOADING'
   const planConnections = member?.planConnections ?? []
@@ -62,19 +79,40 @@ export default function MyBooksPage() {
       <main className="min-h-screen transition-theme" style={{ backgroundColor: 'var(--bg-base)' }}>
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
 
-          <div className="mb-10">
-            <p
-              className="text-xs uppercase tracking-[0.3em] mb-2"
-              style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-sans)' }}
-            >
-              Your Library
-            </p>
-            <h1
-              className="text-4xl"
-              style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}
-            >
-              My Books
-            </h1>
+          <div className="mb-10 flex items-end justify-between gap-4 flex-wrap">
+            <div>
+              <p
+                className="text-xs uppercase tracking-[0.3em] mb-2"
+                style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-sans)' }}
+              >
+                Your Library
+              </p>
+              <h1
+                className="text-4xl"
+                style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}
+              >
+                My Books
+              </h1>
+            </div>
+
+            {/* Install as app button — shown when installable or not yet installed */}
+            {!isInstalled && (installPrompt || true) && (
+              <button
+                onClick={handleInstall}
+                disabled={!installPrompt}
+                className="flex items-center gap-2 px-4 py-2 rounded-full text-xs uppercase tracking-widest transition-opacity"
+                style={{
+                  backgroundColor: installPrompt ? 'var(--accent-gold)' : 'var(--bg-elevated)',
+                  color: installPrompt ? '#2B1A0F' : 'var(--text-muted)',
+                  fontFamily: 'var(--font-sans)',
+                  opacity: installPrompt ? 1 : 0.5,
+                }}
+                title={installPrompt ? 'Install app to your device' : 'Open in browser to install'}
+              >
+                <Download size={13} />
+                Install App
+              </button>
+            )}
           </div>
 
           {/* Not signed in */}

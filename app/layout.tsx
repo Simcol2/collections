@@ -50,6 +50,12 @@ const lora = Lora({
 export const metadata: Metadata = {
   title: 'The Collections',
   description: 'A curated digital reading experience. The Qassandra Collection and beyond.',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'The Collections',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -46,11 +46,13 @@ export function useReadingProgress(memberId: string | null, bookId: string) {
 
       if (!memberId) return
       if (debounceTimer.current) clearTimeout(debounceTimer.current)
-      debounceTimer.current = setTimeout(() => {
-        saveReadingProgress(memberId, bookId, {
-          currentCfi: cfi,
-          percentageCompleted: Math.round(percentage),
-        })
+      debounceTimer.current = setTimeout(async () => {
+        try {
+          await saveReadingProgress(memberId, bookId, {
+            currentCfi: cfi,
+            percentageCompleted: Math.round(percentage),
+          })
+        } catch { /* Firebase unavailable */ }
       }, DEBOUNCE_MS)
     },
     [memberId, bookId]

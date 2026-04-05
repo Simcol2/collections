@@ -4,7 +4,6 @@ export const BOOKS: BookMeta[] = [
   {
     id: 'qassandra_collection',
     title: 'The Qassandra Collection',
-    author: 'KBK',
     tagline: 'A collection that speaks before you do.',
     spineColor: '#2B1A0F',       // deep espresso (hair shadows from pillow)
     titleColor: '#C9A84C',       // brushed gold (sunglasses frame)

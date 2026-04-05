@@ -92,6 +92,36 @@ export async function removeHighlight(memberId: string, bookId: string, highligh
   await deleteDoc(ref)
 }
 
+// ─── Bookmarks ───────────────────────────────────────────────────────────────
+
+export interface BookmarkDoc {
+  id?: string
+  cfi: string
+  label: string
+  createdAt?: unknown
+}
+
+export async function getBookmarks(memberId: string, bookId: string): Promise<BookmarkDoc[]> {
+  const ref = collection(db, 'users', memberId, 'books', bookId, 'bookmarks')
+  const snap = await getDocs(ref)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as BookmarkDoc))
+}
+
+export async function addBookmark(
+  memberId: string,
+  bookId: string,
+  bookmark: Omit<BookmarkDoc, 'id' | 'createdAt'>
+): Promise<string> {
+  const ref = collection(db, 'users', memberId, 'books', bookId, 'bookmarks')
+  const docRef = await addDoc(ref, { ...bookmark, createdAt: serverTimestamp() })
+  return docRef.id
+}
+
+export async function removeBookmark(memberId: string, bookId: string, bookmarkId: string) {
+  const ref = doc(db, 'users', memberId, 'books', bookId, 'bookmarks', bookmarkId)
+  await deleteDoc(ref)
+}
+
 // ─── User Record ─────────────────────────────────────────────────────────────
 
 export async function ensureUserRecord(memberId: string, email: string) {

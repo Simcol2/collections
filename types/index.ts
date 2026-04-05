@@ -56,6 +56,15 @@ export interface MemberstackMember {
   metaData?: Record<string, string>
 }
 
+// ─── Bookmark ─────────────────────────────────────────────────────────────────
+
+export interface BookmarkItem {
+  id: string
+  cfi: string
+  label: string       // e.g. "Chapter 3 · 42%"
+  createdAt?: unknown
+}
+
 // ─── Theme ────────────────────────────────────────────────────────────────────
 
 export type Theme = 'light' | 'dark'
